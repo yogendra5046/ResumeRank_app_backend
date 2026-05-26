@@ -22,6 +22,7 @@ from src.infrastructure.pdf.pymupdf_extractor import PyMuPdfExtractor
 from src.infrastructure.security.clamav_scanner import ClamAvScanner
 from src.domain.ports.cache_repository import CacheRepositoryPort
 from src.domain.ports.scanner import ScannerPort
+from src.domain.ports.embedder import EmbedderPort
 from src.infrastructure.skills.esco_loader import EscoTaxonomy
 from src.infrastructure.skills.networkx_graph import NetworkXSkillGraph
 from src.domain.services.keyword_analyzer import KeywordAnalyzer
@@ -44,7 +45,7 @@ def get_taxonomy(request: Request) -> EscoTaxonomy:
     return request.app.state.taxonomy  # type: ignore[no-any-return]
 
 
-def get_embedder(request: Request) -> MiniLmEmbedder:
+def get_embedder(request: Request) -> EmbedderPort:
     return request.app.state.embedder  # type: ignore[no-any-return]
 
 
@@ -110,7 +111,7 @@ def get_skill_mapper(request: Request) -> JobSkillMapper:
 
 def get_analyze_use_case(
     scanner: Annotated[ScannerPort, Depends(get_scanner)],
-    embedder: Annotated[MiniLmEmbedder, Depends(get_embedder)],
+    embedder: Annotated[EmbedderPort, Depends(get_embedder)],
     cache: Annotated[CacheRepositoryPort, Depends(get_cache_adapter)],
     job_store: Annotated[JobStore, Depends(get_job_store)],
     skill_graph: Annotated[NetworkXSkillGraph, Depends(get_skill_graph)],

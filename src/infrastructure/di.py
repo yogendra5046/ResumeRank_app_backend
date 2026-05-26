@@ -15,10 +15,8 @@ async def preload_models(app_state: any) -> None:
     """Preload all heavy ML models to avoid timeout on first request."""
     logger.info("ml_models_preloading_start")
     
-    # 1. Preload Sentence Transformers (MiniLM)
-    fallback = TfIdfFallbackEmbedder()
-    embedder = MiniLmEmbedder(fallback=fallback)
-    await embedder.warm_up()
+    # 1. Use TF-IDF Embedder (Saves ~300MB RAM vs MiniLM for free tier)
+    embedder = TfIdfFallbackEmbedder()
     app_state.embedder = embedder
     
     # 2. Preload spaCy (for ToneAnalyzer)
