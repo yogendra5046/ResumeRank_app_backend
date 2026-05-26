@@ -28,4 +28,4 @@ COPY . .
 EXPOSE 9000
 
 # Command to run the application (Render/Railway will use this)
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "9000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9000"]
