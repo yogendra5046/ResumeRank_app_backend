@@ -19,15 +19,8 @@ async def preload_models(app_state: any) -> None:
     embedder = TfIdfFallbackEmbedder()
     app_state.embedder = embedder
     
-    # 2. Preload spaCy (for ToneAnalyzer)
-    loop = asyncio.get_running_loop()
+    # 2. Skip Preload spaCy (Saves ~100MB RAM for free tier)
     nlp = None
-    try:
-        logger.info("spacy_preloading", model="en_core_web_sm")
-        nlp = await loop.run_in_executor(None, lambda: spacy.load("en_core_web_sm", disable=["ner", "lemmatizer"]))
-        logger.info("spacy_preloading_success")
-    except Exception as e:
-        logger.error("spacy_preloading_failed", error=str(e))
 
     # 3. Initialize Services with preloaded components
     from src.domain.services.keyword_analyzer import KeywordAnalyzer

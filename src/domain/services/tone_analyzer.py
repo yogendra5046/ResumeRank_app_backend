@@ -18,15 +18,8 @@ _EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="tone-worker")
 class ToneAnalyzer:
     """Analyzes resume tone, passive voice, and readability."""
 
-    def __init__(self, nlp: spacy.language.Language | None = None) -> None:
-        if nlp:
-            self._nlp = nlp
-        else:
-            try:
-                self._nlp = spacy.load("en_core_web_sm", disable=["ner", "lemmatizer"])
-            except Exception:
-                logger.warning("spacy_model_not_found", model="en_core_web_sm")
-                self._nlp = None
+    def __init__(self, nlp: Any | None = None) -> None:
+        self._nlp = nlp
             
         self._weak_verbs = {"responsible", "worked", "helped", "assisted", "assigned", "handled"}
         self._strong_verbs = {"led", "built", "architected", "reduced", "increased", "developed", "managed", "orchestrated", "implemented"}
