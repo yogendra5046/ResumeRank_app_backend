@@ -1,0 +1,17 @@
+services:
+  api:
+    build: .
+    ports:
+      - "9000:8080"
+    environment:
+      - REDIS_ENABLED=false
+      - CLAMAV_ENABLED=false
+      - ADMIN_API_KEY=resume-rank-master-key-2024
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    volumes:
+      - ./resume_rank.db:/app/resume_rank.db
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
