@@ -134,6 +134,10 @@ class JobSkillMapper:
         """Identifies the most likely job role from text (JD or Resume)."""
         text_lower = text.lower()
         scores = {}
+        
+        # Check for seniority to prevent false 'Junior' flagging
+        seniority_keywords = ["senior", "lead", "manager", "staff", "principal", "director", "head of", "architect"]
+        is_senior = any(re.search(r'\b' + re.escape(kw) + r'\b', text_lower) for kw in seniority_keywords)
 
         for role, keywords in self.ROLE_IDENTIFIERS.items():
             score = 0
@@ -141,14 +145,18 @@ class JobSkillMapper:
                 if re.search(r'\b' + re.escape(kw) + r'\b', text_lower):
                     score += 5  # Strong identifier match
             
-            # Also check for skills associated with the role
+            # Boost score significantly based on actual skills
             for skill in self.ROLE_SKILLS.get(role, []):
                 if re.search(r'\b' + re.escape(skill) + r'\b', text_lower):
-                    score += 1
+                    score += 2  # Increased from 1 to 2
             
+            # Penalize Junior Developer if senior keywords are present
+            if role == "Junior Developer" and is_senior:
+                score -= 15
+                
             scores[role] = score
 
-        if not scores or max(scores.values()) < 3:
+        if not scores or max(scores.values()) < 4:
             return "General Professional"
 
         return max(scores, key=scores.get)
