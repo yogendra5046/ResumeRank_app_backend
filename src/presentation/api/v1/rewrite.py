@@ -57,7 +57,7 @@ async def rewrite_resume(
     request: RewriteRequest,
     _api_key: Annotated[str, Depends(verify_api_key)],
 ) -> RewriteResponse:
-    groq_key = os.environ.get("GROQ_API_KEY")
+    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
     if not groq_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
