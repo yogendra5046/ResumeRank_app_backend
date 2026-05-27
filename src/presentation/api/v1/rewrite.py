@@ -5,6 +5,7 @@ from typing import Annotated, List, Any
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+import traceback
 from groq import AsyncGroq
 import httpx
 from src.infrastructure.security.api_key_middleware import verify_api_key
@@ -63,8 +64,12 @@ async def rewrite_resume(
             detail="GROQ_API_KEY not configured on server"
         )
 
-    # Use AsyncGroq for FastAPI compatibility
-    client = AsyncGroq(api_key=groq_key)
+    # Force IPv4 transport for Railway environments where IPv6 outbound is dropped
+    transport = httpx.AsyncHTTPTransport(local_address="0.0.0.0")
+    http_client = httpx.AsyncClient(transport=transport)
+    
+    # Use AsyncGroq for FastAPI compatibility with the custom IPv4 client
+    client = AsyncGroq(api_key=groq_key, http_client=http_client)
     
     system_prompt = (
         "You are the world's most advanced AI Resume Ranker and Career Architect. "
@@ -93,7 +98,7 @@ async def rewrite_resume(
 
     # Use Llama 3.3 for max reasoning and detail
     primary_model = "llama-3.3-70b-versatile"
-    fallback_model = "llama3-70b-8192"
+    fallback_model = "mixtral-8x7b-32768"
 
     async def call_groq(model_name: str):
         # Smart truncation: cap resume at 4000 chars to stay within token budget
@@ -122,7 +127,7 @@ async def rewrite_resume(
             logger.info("groq_enhance_attempt", model=primary_model)
             completion = await call_groq(primary_model)
         except Exception as e:
-            logger.warning("groq_primary_failed_trying_fallback", error=str(e))
+            logger.warning("groq_primary_failed_trying_fallback", error=str(e), traceback=traceback.format_exc())
             completion = await call_groq(fallback_model)
         
         raw_content = completion.choices[0].message.content

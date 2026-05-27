@@ -1,4 +1,4 @@
-﻿annotated-doc
+annotated-doc
 annotated-types
 anyio
 asgiref
@@ -30,7 +30,7 @@ Flask
 fsspec
 googleapis-common-protos
 greenlet
-groq
+groq>=1.2.0
 grpcio
 h11
 hf-xet
