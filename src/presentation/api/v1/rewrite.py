@@ -64,12 +64,8 @@ async def rewrite_resume(
             detail="GROQ_API_KEY not configured on server"
         )
 
-    # Force IPv4 transport for Railway environments where IPv6 outbound is dropped
-    transport = httpx.AsyncHTTPTransport(local_address="0.0.0.0")
-    http_client = httpx.AsyncClient(transport=transport)
-    
-    # Use AsyncGroq for FastAPI compatibility with the custom IPv4 client
-    client = AsyncGroq(api_key=groq_key, http_client=http_client)
+    client = AsyncGroq(api_key=groq_key)
+
     
     system_prompt = (
         "You are the world's most advanced AI Resume Ranker and Career Architect. "
