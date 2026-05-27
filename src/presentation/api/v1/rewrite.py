@@ -96,13 +96,19 @@ async def rewrite_resume(
     primary_model = "llama-3.3-70b-versatile"
     fallback_model = "mixtral-8x7b-32768"
 
+    import requests
+
     def call_groq_sync(model_name: str):
         safe_resume = request.resume_text[:4000] if len(request.resume_text) > 4000 else request.resume_text
         safe_jd = request.jd_text[:1500] if len(request.jd_text) > 1500 else request.jd_text
-
-        return client.chat.completions.create(
-            model=model_name,
-            messages=[
+        
+        headers = {
+            "Authorization": f"Bearer {groq_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model_name,
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": (
                     f"JD: {safe_jd}\n"
@@ -111,22 +117,29 @@ async def rewrite_resume(
                     f"Target Sections: {', '.join(request.weak_sections)}"
                 )},
             ],
-            temperature=0.2,
-            max_tokens=6000,
-            response_format={"type": "json_object"},
-            timeout=90.0,
+            "temperature": 0.2,
+            "max_tokens": 6000,
+            "response_format": {"type": "json_object"}
+        }
+        
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=90.0
         )
+        response.raise_for_status()
+        return response.json()
 
     try:
         try:
             logger.info("groq_enhance_attempt", model=primary_model)
-            completion = await run_in_threadpool(call_groq_sync, primary_model)
+            completion_data = await run_in_threadpool(call_groq_sync, primary_model)
         except Exception as e:
             logger.warning("groq_primary_failed_trying_fallback", error=str(e), traceback=traceback.format_exc())
-            completion = await run_in_threadpool(call_groq_sync, fallback_model)
+            completion_data = await run_in_threadpool(call_groq_sync, fallback_model)
 
-        
-        raw_content = completion.choices[0].message.content
+        raw_content = completion_data["choices"][0]["message"]["content"]
         
         # Robust JSON extraction: Handle markdown code blocks
         if "```json" in raw_content:
@@ -168,7 +181,7 @@ async def rewrite_resume(
                         "url": str(item.get("url", "https://www.google.com/search?q=learn+skill"))
                     })
 
-        tokens = completion.usage.total_tokens if completion.usage else 0
+        tokens = completion_data.get("usage", {}).get("total_tokens", 0)
         
         return RewriteResponse(
             rewritten_text=rewritten_text,
