@@ -32,6 +32,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Database Initialization
     from src.infrastructure.database import engine, Base
     from src.domain.models.user import User # Ensure model is registered
+    from src.domain.models.history import HistoryItem
+    from src.domain.models.job import JobApplication
     Base.metadata.create_all(bind=engine)
 
     # Redis / Cache / JobStore
@@ -92,6 +94,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    from src.presentation.api.v1 import analyze, gdpr, health, status as status_route, skills as skills_route, rewrite, insights, auth, history, jobs
+
     # CORS – Allow mobile devices on local network
     app.add_middleware(
         CORSMiddleware,
@@ -110,6 +114,8 @@ def create_app() -> FastAPI:
     app.include_router(rewrite.router, prefix="/v1")
     app.include_router(insights.router, prefix="/v1")
     app.include_router(auth.router, prefix="/v1")
+    app.include_router(history.router, prefix="/v1")
+    app.include_router(jobs.router, prefix="/v1")
 
     # Prometheus metrics endpoint (separate port in K8s is best practice;
     # here we mount at /metrics for Cloud Run simplicity)

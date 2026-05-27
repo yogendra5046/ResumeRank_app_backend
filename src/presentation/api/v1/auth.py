@@ -47,12 +47,13 @@ class Token(BaseModel):
 
 @router.post("/register", response_model=dict)
 def register(user_in: UserRegister, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.email == user_in.email).first()
+    user_email = user_in.email.lower()
+    db_user = db.query(User).filter(User.email == user_email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
     new_user = User(
-        email=user_in.email,
+        email=user_email,
         hashed_password=AuthService.get_password_hash(user_in.password),
         full_name=user_in.full_name,
         experience=[],
@@ -65,7 +66,8 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 def login(user_in: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == user_in.email).first()
+    user_email = user_in.email.lower()
+    user = db.query(User).filter(User.email == user_email).first()
     if not user or not AuthService.verify_password(user_in.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
