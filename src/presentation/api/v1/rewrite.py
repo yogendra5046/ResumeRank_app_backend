@@ -5,7 +5,7 @@ from typing import Annotated, List, Any
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from groq import Groq
+from groq import AsyncGroq
 import httpx
 from src.infrastructure.security.api_key_middleware import verify_api_key
 
@@ -63,9 +63,8 @@ async def rewrite_resume(
             detail="GROQ_API_KEY not configured on server"
         )
 
-    # Custom client to avoid the 'proxy' bug in Groq/Httpx version conflict
-    http_client = httpx.Client(proxy=None)
-    client = Groq(api_key=groq_key, http_client=http_client)
+    # Use AsyncGroq for FastAPI compatibility
+    client = AsyncGroq(api_key=groq_key)
     
     system_prompt = (
         "You are the world's most advanced AI Resume Ranker and Career Architect. "
@@ -96,12 +95,12 @@ async def rewrite_resume(
     primary_model = "llama-3.3-70b-versatile"
     fallback_model = "llama3-70b-8192"
 
-    def call_groq(model_name: str):
+    async def call_groq(model_name: str):
         # Smart truncation: cap resume at 4000 chars to stay within token budget
         safe_resume = request.resume_text[:4000] if len(request.resume_text) > 4000 else request.resume_text
         safe_jd = request.jd_text[:1500] if len(request.jd_text) > 1500 else request.jd_text
 
-        return client.chat.completions.create(
+        return await client.chat.completions.create(
             model=model_name,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -121,10 +120,10 @@ async def rewrite_resume(
     try:
         try:
             logger.info("groq_enhance_attempt", model=primary_model)
-            completion = call_groq(primary_model)
+            completion = await call_groq(primary_model)
         except Exception as e:
             logger.warning("groq_primary_failed_trying_fallback", error=str(e))
-            completion = call_groq(fallback_model)
+            completion = await call_groq(fallback_model)
         
         raw_content = completion.choices[0].message.content
         
