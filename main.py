@@ -1,4 +1,4 @@
-﻿import os
+import os
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -8,6 +8,13 @@ import structlog
 
 # Load environment variables
 load_dotenv()
+
+# Force IPv4 globally for all socket connections to prevent Railway IPv6 drop timeouts
+import socket
+old_getaddrinfo = socket.getaddrinfo
+def new_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    return old_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+socket.getaddrinfo = new_getaddrinfo
 
 # Configure logging
 structlog.configure(
