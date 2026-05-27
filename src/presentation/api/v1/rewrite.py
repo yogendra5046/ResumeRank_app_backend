@@ -64,9 +64,10 @@ async def rewrite_resume(
             detail="GROQ_API_KEY not configured on server"
         )
 
-    client = AsyncGroq(api_key=groq_key)
+    from groq import Groq
+    from fastapi.concurrency import run_in_threadpool
+    client = Groq(api_key=groq_key)
 
-    
     system_prompt = (
         "You are the world's most advanced AI Resume Ranker and Career Architect. "
         "Your goal is to transform a standard resume into a top 1% candidate profile. "
@@ -92,16 +93,14 @@ async def rewrite_resume(
         f"Target Sections: {', '.join(request.weak_sections)}"
     )
 
-    # Use Llama 3.3 for max reasoning and detail
     primary_model = "llama-3.3-70b-versatile"
     fallback_model = "mixtral-8x7b-32768"
 
-    async def call_groq(model_name: str):
-        # Smart truncation: cap resume at 4000 chars to stay within token budget
+    def call_groq_sync(model_name: str):
         safe_resume = request.resume_text[:4000] if len(request.resume_text) > 4000 else request.resume_text
         safe_jd = request.jd_text[:1500] if len(request.jd_text) > 1500 else request.jd_text
 
-        return await client.chat.completions.create(
+        return client.chat.completions.create(
             model=model_name,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -121,10 +120,11 @@ async def rewrite_resume(
     try:
         try:
             logger.info("groq_enhance_attempt", model=primary_model)
-            completion = await call_groq(primary_model)
+            completion = await run_in_threadpool(call_groq_sync, primary_model)
         except Exception as e:
             logger.warning("groq_primary_failed_trying_fallback", error=str(e), traceback=traceback.format_exc())
-            completion = await call_groq(fallback_model)
+            completion = await run_in_threadpool(call_groq_sync, fallback_model)
+
         
         raw_content = completion.choices[0].message.content
         
