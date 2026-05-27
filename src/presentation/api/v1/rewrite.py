@@ -122,14 +122,21 @@ async def rewrite_resume(
             "response_format": {"type": "json_object"}
         }
         
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=90.0
-        )
-        response.raise_for_status()
-        return response.json()
+        import time
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            response = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=90.0
+            )
+            if response.status_code == 429 and attempt < max_retries:
+                logger.warning("groq_rate_limit_hit_retrying", attempt=attempt+1)
+                time.sleep(2)
+                continue
+            response.raise_for_status()
+            return response.json()
 
     try:
         try:
