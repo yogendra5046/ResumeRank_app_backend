@@ -7,6 +7,11 @@ class ScoreDetail(BaseModel):
     details: List[str] = Field(default_factory=list, description="Reasoning or notes for the score")
     debug_text: Optional[str] = Field(None, description="Debug text if score is 0")
 
+class AtsParseDetail(ScoreDetail):
+    section_audit: Dict[str, Any] = Field(default_factory=dict)
+    format_warnings: List[str] = Field(default_factory=list)
+
+
 class SkillGraphItem(BaseModel):
     skill: str
     status: str
@@ -45,6 +50,7 @@ class VerbStats(BaseModel):
     strong: int
     weak: int
     ratio: int
+    weak_bullet_points: List[str] = Field(default_factory=list)
 
 class EstimatedSalary(BaseModel):
     category: str = "General"
@@ -96,7 +102,7 @@ class ScoreResponse(BaseModel):
     impact: ScoreDetail
     format: ScoreDetail
     skill_gap: SkillGapDetail
-    ats_parse: ScoreDetail
+    ats_parse: AtsParseDetail
     
     estimated_salary: EstimatedSalary = Field(default_factory=EstimatedSalary)
     professional_persona: ProfessionalPersona = Field(default_factory=ProfessionalPersona)

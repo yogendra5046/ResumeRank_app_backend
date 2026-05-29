@@ -562,18 +562,21 @@ def analyze_resume_full(
     # 4. Impact & Format Analysis (Remove default floors)
     from src.domain.services.ats_scorer import ats_scorer
     
+    audit_report = ats_scorer.get_audit_report(resume_text, jd_text)
+    weak_bullet_points = audit_report.get("verb_audit", {}).get("weak_bullet_points", [])
+    
     if ats_results:
         impact_score = ats_results["impact"]["score"]
         format_score = ats_results["format"]["score"]
         ats_parse_score = ats_results["ats"]["score"]
         verb_stats = ats_results["impact"]["raw_metrics"]
         if isinstance(verb_stats, dict) and "verbs" in verb_stats:
-            verb_stats = {"strong": len(verb_stats["verbs"]), "weak": 0, "ratio": impact_score}
+            verb_stats = {"strong": len(verb_stats["verbs"]), "weak": 0, "ratio": impact_score, "weak_bullet_points": weak_bullet_points}
     else:
         # Dynamic fallback to text-based analysis (Zero Dummy Logic)
         impact_data = ats_scorer.score_impact(resume_text)
         impact_score = impact_data["score"]
-        verb_stats = {"strong": len(impact_data["raw_metrics"]["verbs"]), "weak": 0, "ratio": impact_score}
+        verb_stats = {"strong": len(impact_data["raw_metrics"]["verbs"]), "weak": 0, "ratio": impact_score, "weak_bullet_points": weak_bullet_points}
         
         format_data = ats_scorer.score_text_format(resume_text)
         format_score = format_data["score"]
@@ -709,7 +712,9 @@ def analyze_resume_full(
         "missing_skills_list": list(all_missing_names),
         "ats_parse": {
             "score": ats_parse_score, 
-            "details": (ats_results["ats"]["details"] if ats_results else []) + [f"Professionalism: {professionalism_score}%"]
+            "details": (ats_results["ats"]["details"] if ats_results else []) + [f"Professionalism: {professionalism_score}%"],
+            "section_audit": audit_report.get("section_audit", {}),
+            "format_warnings": audit_report.get("format_warnings", [])
         },
         "jd_red_flags": detect_jd_red_flags(jd_text),
         "authenticity_check": check_authenticity(resume_text, jd_text, semantic_score),
