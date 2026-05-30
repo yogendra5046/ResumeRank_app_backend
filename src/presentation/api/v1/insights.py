@@ -95,7 +95,7 @@ async def search_jobs(
                         if item.get("salary_min") else "Salary not disclosed"
                     ),
                     "url": item.get("redirect_url", ""),
-                    "description": item.get("description", "")[:200] + "...",
+                    "description": item.get("description", ""),
                     "posted": item.get("created", ""),
                 })
 
