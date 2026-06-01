@@ -74,11 +74,36 @@ async def analyze_resume(
 
     base_url = str(request.base_url).rstrip("/")
     from fastapi import HTTPException
+    import re
+    import httpx
+    
+    actual_jd = jd_text
+    urls = re.findall(r'(https?://[^\s]+)', jd_text)
+    # Skip scraping for auth-gated platforms that return login pages
+    GATED_DOMAINS = ['linkedin.com', 'indeed.com', 'naukri.com', 'glassdoor.com', 'monster.com', 'ziprecruiter.com']
+    if urls:
+        target_url = urls[0]
+        is_gated = any(domain in target_url for domain in GATED_DOMAINS)
+        if not is_gated:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    r = await client.get(f"https://r.jina.ai/{target_url}")
+                    scraped_text = r.text if r.status_code == 200 else ""
+                    # Only use scraped content if it's substantive (not a login/error page)
+                    if len(scraped_text) > 500 and not any(
+                        kw in scraped_text.lower() for kw in ['sign in', 'log in', 'captcha', 'access denied']
+                    ):
+                        actual_jd = f"Scraped Full JD:\n{scraped_text[:8000]}\n\nOriginal Context:\n{jd_text}"
+            except Exception as e:
+                log.warning("jina_ai_scrape_failed", url=target_url, error=str(e))
+        else:
+            log.info("jina_scrape_skipped_gated_domain", url=target_url)
+            
     try:
         result = await use_case.execute(
             pdf_bytes=pdf_bytes,
             filename=resume.filename or "resume.pdf",
-            raw_jd=jd_text or "Software Engineer Python Java SQL AWS", # Default skills if JD is empty
+            raw_jd=actual_jd or "Software Engineer Python Java SQL AWS", # Default skills if JD is empty
             trace_id=trace_id,
             base_url=base_url,
         )

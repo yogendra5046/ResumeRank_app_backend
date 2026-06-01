@@ -27,6 +27,7 @@ async def preload_models(app_state: any) -> None:
     from src.domain.services.section_scorer import SectionScorer
     from src.domain.services.ats_parse_checker import AtsParseChecker
     from src.domain.services.resume_validator import ResumeValidator
+    from src.domain.services.job_description_validator import JobDescriptionValidator
     from src.domain.services.salary_estimator import SalaryEstimator
     from src.domain.services.persona_analyzer import PersonaAnalyzer
     
@@ -35,6 +36,7 @@ async def preload_models(app_state: any) -> None:
     app_state.ats_checker = AtsParseChecker()
     app_state.tone_analyzer = ToneAnalyzer(nlp=nlp)
     app_state.resume_validator = ResumeValidator()
+    app_state.job_description_validator = JobDescriptionValidator()
     app_state.salary_estimator = SalaryEstimator()
     app_state.persona_analyzer = PersonaAnalyzer()
     

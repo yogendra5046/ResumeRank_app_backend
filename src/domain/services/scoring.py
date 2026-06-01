@@ -363,25 +363,37 @@ def generate_roast(resume_text: str, overall_score: int, red_flags: List[str], m
     return roasts[:4]
 
 def generate_career_accelerator(resume_text: str, jd_text: str, missing_skills: List[str], salary_range: str, persona: str) -> Dict:
+    company = "your company"
+    lines = jd_text.splitlines()[:10]
+    for line in lines:
+        match = re.search(r'\bat\s+([A-Z][\w\s]+)', line)
+        if match:
+            company = match.group(1).strip().rstrip('.')
+            break
+            
+    from src.domain.services.job_skill_mapper import JobSkillMapper
+    mapper = JobSkillMapper()
+    target_role = mapper.identify_role(jd_text)
+    
     # 1. Persona-Driven Outreach Templates
     outreach_config = {
         "Leader/Strategist": {
-            "Professional": "Hi [Name], I noticed the [Role] opening at [Company]. My background in strategic leadership and scaling high-performing teams seems to align perfectly with your current objectives. I'd love to share how I can drive similar impact for you.",
-            "Bold": "Hello [Name], I don't just manage teams—I build roadmaps for growth. With my experience in [Top Skill], I'm ready to help [Company] achieve its next milestone. Let's discuss your vision for this role."
+            "Professional": f"Hi [Name], I noticed the {target_role} opening at {company}. My background in strategic leadership and scaling high-performing teams seems to align perfectly with your current objectives. I'd love to share how I can drive similar impact for you.",
+            "Bold": f"Hello [Name], I don't just manage teams—I build roadmaps for growth. With my experience in {missing_skills[0] if missing_skills else 'leadership'}, I'm ready to help {company} achieve its next milestone. Let's discuss your vision for this role."
         },
         "Technical Specialist": {
-            "Professional": "Hi [Name], I'm a specialized engineer with deep expertise in [Top Skill]. I saw your [Role] posting and was impressed by your technical stack. I'd love to discuss how my implementation focus can contribute to your system's scalability.",
-            "Bold": "Hey [Name], I saw the [Role] at [Company]. I've spent the last few years optimizing systems similar to yours. If you're looking for someone who can hit the ground running on day one, we should chat."
+            "Professional": f"Hi [Name], I'm a specialized engineer with deep expertise in {missing_skills[0] if missing_skills else 'software engineering'}. I saw your {target_role} posting and was impressed by your technical stack. I'd love to discuss how my implementation focus can contribute to your system's scalability.",
+            "Bold": f"Hey [Name], I saw the {target_role} at {company}. I've spent the last few years optimizing systems similar to yours. If you're looking for someone who can hit the ground running on day one, we should chat."
         },
         "Architect/Visionary": {
-            "Professional": "Hi [Name], I'm an Architect focused on building scalable systems. I'm very interested in the [Role] at [Company] because of your focus on high-availability. My background in structural design would be a great asset.",
-            "Bold": "Hi [Name], Great systems aren't just built; they're engineered for the future. I'd love to show you how my architectural approach can help [Company] scale its infrastructure."
+            "Professional": f"Hi [Name], I'm an Architect focused on building scalable systems. I'm very interested in the {target_role} at {company} because of your focus on high-availability. My background in structural design would be a great asset.",
+            "Bold": f"Hi [Name], Great systems aren't just built; they're engineered for the future. I'd love to show you how my architectural approach can help {company} scale its infrastructure."
         }
     }
     
     p_outreach = outreach_config.get(persona, {
-        "Professional": f"Hi [Name], I recently saw the [Role] opening at [Company]. My background in {persona} and experience with key requirements like {missing_skills[0] if missing_skills else 'industry standards'} align well with your team's goals.",
-        "Bold": f"Hey [Name], I'm reaching out regarding the [Role] at [Company]. With my focus on {persona}, I'm ready to hit the ground running and solve the challenges you're facing."
+        "Professional": f"Hi [Name], I recently saw the {target_role} opening at {company}. My background in {persona} and experience with key requirements like {missing_skills[0] if missing_skills else 'industry standards'} align well with your team's goals.",
+        "Bold": f"Hey [Name], I'm reaching out regarding the {target_role} at {company}. With my focus on {persona}, I'm ready to hit the ground running and solve the challenges you're facing."
     })
     
     outreach = [
@@ -397,7 +409,7 @@ def generate_career_accelerator(resume_text: str, jd_text: str, missing_skills: 
         },
         {
             "scenario": "Equity/Benefits Push",
-            "script": "While the base salary is close to my expectations, I'd like to discuss the performance bonus structure or equity options. Given my history of delivering measurable ROI, I'm looking for a long-term alignment with [Company]'s growth."
+            "script": f"While the base salary is close to my expectations, I'd like to discuss the performance bonus structure or equity options. Given my history of delivering measurable ROI, I'm looking for a long-term alignment with {company}'s growth."
         }
     ]
     
@@ -660,10 +672,11 @@ def analyze_resume_full(
         "percentile": percentile,
         "percentile_text": f"Your resume is performing better than {percentile}% of candidates in the {target_role} category.",
         "score_breakdown": {
-            "keywords": int(keyword_score * 0.40),
-            "relevance": int(semantic_score_mapped * 0.15),
-            "impact": int(impact_score * 0.25),
-            "presentation": int((format_score * 0.6 + professionalism_score * 0.4) * 0.20)
+            "Keywords": keyword_score,
+            "Relevance": semantic_score_mapped,
+            "Impact": impact_score,
+            "Formatting": format_score,
+            "Professionalism": int(professionalism_score)
         },
         "matched_skills": [{**s, "importance": "High" if s.get('weight', 7) >= 8 else "Medium"} for s in matched],
         "missing_skills": [{**s, "importance": "Critical" if s.get('weight', 7) >= 9 else ("High" if s.get('weight', 7) >= 7 else "Medium")} for s in missing],
@@ -731,7 +744,7 @@ def analyze_resume_full(
 
     return {
         **base_response,
-        "career_guidance": mapper.get_career_guidance(resume_text),
+        "career_guidance": mapper.get_career_guidance(resume_text, jd_text),
         "negotiation_scripts": accelerator_data["negotiation_scripts"],
         "outreach_templates": accelerator_data["outreach_templates"],
         "culture_bio": accelerator_data["culture_bio"],

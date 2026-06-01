@@ -32,6 +32,7 @@ class AnalyzeResumeUseCase:
         self._section_scorer = kwargs.get("section_scorer")
         self._tone_analyzer = kwargs.get("tone_analyzer")
         self._resume_validator = kwargs.get("resume_validator")
+        self._job_description_validator = kwargs.get("job_description_validator")
         self._salary_estimator = kwargs.get("salary_estimator")
         self._persona_analyzer = kwargs.get("persona_analyzer")
 
@@ -78,6 +79,17 @@ class AnalyzeResumeUseCase:
             scan_res = await self._scanner.scan(pdf_bytes, filename)
             if not scan_res.is_clean:
                 raise ValueError(f"malware detected: {scan_res.threat_name}")
+
+        # 0.1 Validate Job Description
+        if self._job_description_validator:
+            jd_validation = self._job_description_validator.validate(raw_jd)
+            if not jd_validation["is_jd"]:
+                log.warning("invalid_job_description_detected", reasons=jd_validation["reasons"])
+                from fastapi import HTTPException
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid Job Description: This doesn't look like a valid job description. {'. '.join(jd_validation['reasons'])}"
+                )
 
         # 1. Caching
         resume_sha = hashlib.sha256(pdf_bytes).hexdigest()

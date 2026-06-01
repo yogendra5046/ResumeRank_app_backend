@@ -232,10 +232,17 @@ class JobSkillMapper:
         
         return sorted(alignments, key=lambda x: x["fit_score"], reverse=True)
 
-    def get_career_guidance(self, resume_text: str) -> Dict[str, any]:
+    def get_career_guidance(self, resume_text: str, jd_text: str = None) -> Dict[str, any]:
         """Predicts the next career step and provides a roadmap to get there."""
         current_role = self.identify_role(resume_text)
+        target_role = None
+        if jd_text:
+            target_role = self.identify_role(jd_text)
+            
         next_roles = self.CAREER_PATHS.get(current_role, ["Senior " + current_role])
+        if target_role and target_role != current_role:
+            next_roles.insert(0, target_role)
+            next_roles = list(dict.fromkeys(next_roles)) # Keep unique
         
         # Comprehensive Roadmap
         roadmap = []

@@ -30,6 +30,7 @@ from src.domain.services.section_scorer import SectionScorer
 from src.domain.services.ats_parse_checker import AtsParseChecker
 from src.domain.services.tone_analyzer import ToneAnalyzer
 from src.domain.services.resume_validator import ResumeValidator
+from src.domain.services.job_description_validator import JobDescriptionValidator
 from src.domain.services.salary_estimator import SalaryEstimator
 from src.domain.services.persona_analyzer import PersonaAnalyzer
 from src.domain.services.job_skill_mapper import JobSkillMapper
@@ -97,6 +98,10 @@ def get_resume_validator(request: Request) -> ResumeValidator:
     return request.app.state.resume_validator
 
 
+def get_job_description_validator(request: Request) -> JobDescriptionValidator:
+    return request.app.state.job_description_validator
+
+
 def get_salary_estimator(request: Request) -> SalaryEstimator:
     return request.app.state.salary_estimator
 
@@ -122,6 +127,7 @@ def get_analyze_use_case(
     ats_checker: Annotated[AtsParseChecker, Depends(get_ats_checker)],
     tone_analyzer: Annotated[ToneAnalyzer, Depends(get_tone_analyzer)],
     resume_validator: Annotated[ResumeValidator, Depends(get_resume_validator)],
+    job_description_validator: Annotated[JobDescriptionValidator, Depends(get_job_description_validator)],
     salary_estimator: Annotated[SalaryEstimator, Depends(get_salary_estimator)],
     persona_analyzer: Annotated[PersonaAnalyzer, Depends(get_persona_analyzer)],
 ) -> AnalyzeResumeUseCase:
@@ -138,6 +144,7 @@ def get_analyze_use_case(
         ats_checker=ats_checker,
         tone_analyzer=tone_analyzer,
         resume_validator=resume_validator,
+        job_description_validator=job_description_validator,
         salary_estimator=salary_estimator,
         persona_analyzer=persona_analyzer,
     )

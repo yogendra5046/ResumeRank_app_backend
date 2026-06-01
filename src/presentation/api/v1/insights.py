@@ -45,7 +45,7 @@ async def search_jobs(
                     "location": "Bengaluru, India",
                     "salary": "₹8L – ₹18L / year",
                     "url": f"https://www.linkedin.com/jobs/search/?keywords={query}",
-                    "description": "Looking for a skilled professional to join our growing team.",
+                    "description": f"We are looking for a highly skilled {query} Engineer to join our core backend team. Requirements: 3+ years of experience building scalable applications. Strong proficiency in Python, Java, or Node.js. Experience with Cloud platforms (AWS/GCP), microservices architecture, and SQL/NoSQL databases. You will be responsible for designing APIs, optimizing performance, and working closely with product managers.",
                     "posted": "2 days ago",
                 },
                 {
@@ -54,7 +54,7 @@ async def search_jobs(
                     "location": "Hyderabad, India",
                     "salary": "₹15L – ₹30L / year",
                     "url": f"https://www.naukri.com/jobs-in-india?q={query}",
-                    "description": "Senior-level role with competitive compensation and growth.",
+                    "description": f"Senior-level role for a {query} Developer. Must have 5+ years of experience in software development. Strong background in React, Angular, or Vue for frontend, and solid understanding of CI/CD pipelines (Jenkins, GitHub Actions). Experience with Kubernetes and Docker is a huge plus. Expect to mentor junior developers and lead technical architectural decisions.",
                     "posted": "1 day ago",
                 },
                 {
@@ -63,7 +63,7 @@ async def search_jobs(
                     "location": "Pune, India",
                     "salary": "₹25L – ₹45L / year",
                     "url": f"https://www.indeed.co.in/jobs?q={query}",
-                    "description": "Leadership position driving technical strategy.",
+                    "description": f"Leadership position driving technical strategy for our {query} domain. Requirements: 8+ years of industry experience. Deep expertise in Distributed Systems, System Design, and highly available architectures. Proficiency with Kafka, Redis, and Elasticsearch. Must have excellent communication skills and a proven track record of scaling platforms to millions of users.",
                     "posted": "3 hours ago",
                 },
             ],
@@ -78,25 +78,45 @@ async def search_jobs(
                     "app_key": app_key,
                     "results_per_page": results,
                     "what": query,
+                    "sort_by": "date",
+                    "max_days_old": 30,
                     "content-type": "application/json",
                 },
             )
             resp.raise_for_status()
             data = resp.json()
 
+            currency_symbols = {
+                "in": "₹",
+                "us": "$",
+                "gb": "£",
+                "au": "$",
+                "ca": "$",
+            }
+            currency = currency_symbols.get(country, "$")
+
             jobs = []
             for item in data.get("results", []):
+                salary_min = item.get("salary_min")
+                salary_max = item.get("salary_max")
+                salary_str = "Salary not disclosed"
+                if salary_min and salary_max:
+                    salary_str = f"{currency}{int(salary_min):,} – {currency}{int(salary_max):,}"
+                elif salary_min:
+                    salary_str = f"From {currency}{int(salary_min):,}"
+
+                # Extract YYYY-MM-DD from ISO timestamp
+                created_date = item.get("created", "")
+                posted_str = created_date.split("T")[0] if "T" in created_date else created_date
+
                 jobs.append({
                     "title": item.get("title", ""),
                     "company": item.get("company", {}).get("display_name", ""),
                     "location": item.get("location", {}).get("display_name", ""),
-                    "salary": (
-                        f"₹{int(item['salary_min']):,} – ₹{int(item['salary_max']):,}"
-                        if item.get("salary_min") else "Salary not disclosed"
-                    ),
+                    "salary": salary_str,
                     "url": item.get("redirect_url", ""),
                     "description": item.get("description", ""),
-                    "posted": item.get("created", ""),
+                    "posted": posted_str,
                 })
 
             return {"source": "adzuna", "total": data.get("count", 0), "jobs": jobs}
