@@ -30,7 +30,9 @@ async def health(request: Request) -> JSONResponse:
 
     # Model check
     embedder = request.app.state.embedder
-    model_ok: bool = embedder._model is not None or embedder._circuit_open
+    model_ok = True
+    if hasattr(embedder, "_model"):
+        model_ok = embedder._model is not None or getattr(embedder, "_circuit_open", False)
     checks["model"] = "ok" if model_ok else "warming_up"
 
     # ClamAV check (non-fatal – logs warning only)
@@ -71,7 +73,10 @@ async def ready(request: Request) -> JSONResponse:
     Kubernetes will not route traffic until this returns 200.
     """
     embedder = request.app.state.embedder
-    if embedder._model is not None or embedder._circuit_open:
+    is_ready = True
+    if hasattr(embedder, "_model"):
+        is_ready = embedder._model is not None or getattr(embedder, "_circuit_open", False)
+    if is_ready:
         return JSONResponse(status_code=200, content={"ready": True})
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

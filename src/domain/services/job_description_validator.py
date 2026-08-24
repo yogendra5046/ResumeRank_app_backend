@@ -76,9 +76,9 @@ class JobDescriptionValidator:
                 "found_headers": [],
                 "reasons": reasons
             }
-
         # 1. Length Check
-        if len(stripped_text) < 80 or word_count < 15:
+        # Lower limits to support brief/truncated JDs from job search API
+        if len(stripped_text) < 40 or word_count < 8:
             return {
                 "is_jd": False,
                 "confidence_score": 0,
@@ -122,7 +122,11 @@ class JobDescriptionValidator:
         if pronoun_ratio > 0.05:  # More than 5% of words are "I/me/my"
             score -= 20
 
-        is_jd = score >= 30
+        # Special bypass: if it has common job-posting metadata structure (like live job context)
+        if any(marker in text_lower for marker in ["job title:", "company:", "description:", "url:"]):
+            score += 40
+
+        is_jd = score >= 10
         
         reasons = []
         if not is_jd:
@@ -130,7 +134,7 @@ class JobDescriptionValidator:
                 reasons.append("Missing typical job description sections (Requirements, Responsibilities, etc.) or hiring phrases")
             if len(found_negative_phrases) > 0 or pronoun_ratio > 0.02:
                 reasons.append("Text appears to be a resume, cover letter, or personal biography rather than a job description")
-            if score < 30 and len(reasons) == 0:
+            if score < 10 and len(reasons) == 0:
                 reasons.append("Content does not follow a typical job description structure")
 
         return {

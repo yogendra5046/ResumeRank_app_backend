@@ -1,16 +1,5 @@
 import re
 import fitz  # PyMuPDF
-import spacy
-import hashlib
-import numpy as np
-
-# Load spaCy model
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    import spacy.cli
-    spacy.cli.download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
 
 class AtsScorer:
     def __init__(self):
@@ -169,34 +158,31 @@ class AtsScorer:
         return {"score": max(0, score), "details": details}
 
     def _extract_hard_skills(self, text: str) -> list[str]:
-        # Market standard blacklist for resume/JD text
+        # Lightweight Regex Fallback to replace spaCy (Saves 100MB+ RAM)
         blacklist = {
             "experience", "years", "requirements", "engineer", "software", "developer",
             "impact", "metrics", "strong", "results", "excellent", "skills", "ability",
             "team", "work", "proven", "track", "record", "professional", "management",
             "knowledge", "understanding", "degree", "qualification", "candidate",
             "company", "business", "responsibilities", "use", "activities", "duties",
-            "assigned", "provide", "support", "environment", "field", "area", "related"
+            "assigned", "provide", "support", "environment", "field", "area", "related",
+            "and", "the", "with", "for", "from", "that", "this", "are", "have", "has"
         }
         
-        doc = nlp(text.lower())
+        text_lower = text.lower()
+        # Extract alphanumeric words > 2 chars
+        words = re.findall(r'\b[a-z0-9+#.-]{3,}\b', text_lower)
         skills = []
-        # Filter for nouns and proper nouns that aren't too common
-        for token in doc:
-            # Filter for nouns and proper nouns that aren't too common
-            # and ignore purely numeric or hyphenated number strings like '0-1'
-            t_text = token.text
-            if token.pos_ in ["NOUN", "PROPN"] and not token.is_stop and len(t_text) > 2:
-                if t_text not in blacklist and not re.match(r'^\d+-\d+$', t_text):
-                    skills.append(t_text)
+        
+        for w in words:
+            if w not in blacklist and not w.isnumeric() and not re.match(r'^\d+-\d+$', w):
+                skills.append(w)
                 
-        # Also include common skill chunks (Big Data, Machine Learning, etc.)
-        for chunk in doc.noun_chunks:
-            clean_chunk = " ".join([t.text for t in chunk if not t.is_stop and not t.is_punct])
-            if clean_chunk and len(clean_chunk) > 2 and clean_chunk not in blacklist:
-                # Check if any part of the chunk is in blacklist (e.g. "strong impact")
-                if not any(word in blacklist for word in clean_chunk.split()):
-                    skills.append(clean_chunk)
+        # Basic bigrams (simulating noun chunks)
+        for i in range(len(words) - 1):
+            bigram = f"{words[i]} {words[i+1]}"
+            if words[i] not in blacklist and words[i+1] not in blacklist:
+                skills.append(bigram)
             
         skill_counts = {}
         for s in skills:
@@ -214,9 +200,12 @@ class AtsScorer:
         total_points = 0
         max_points = len(jd_skills) * 10
         
-        # Pre-extract noun chunks from resume for semantic matching
-        resume_doc = nlp(resume_lower)
-        resume_chunks = [chunk.text for chunk in resume_doc.noun_chunks if len(chunk.text) > 2]
+        # Lightweight chunking fallback (Regex-based)
+        words = re.findall(r'\b[a-z0-9+#.-]{3,}\b', resume_lower)
+        resume_chunks = []
+        for i in range(len(words) - 1):
+            resume_chunks.append(f"{words[i]} {words[i+1]}")
+        resume_chunks.extend(words)
         
         details = []
         for skill in jd_skills:

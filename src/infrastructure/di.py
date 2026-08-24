@@ -1,11 +1,7 @@
 """Infrastructure: Dependency Injection and ML model preloading."""
 from __future__ import annotations
-
 import asyncio
-import spacy
 import structlog
-from sentence_transformers import SentenceTransformer
-from src.infrastructure.ml.minilm_embedder import MiniLmEmbedder
 from src.infrastructure.ml.tfidf_fallback import TfIdfFallbackEmbedder
 from src.domain.services.tone_analyzer import ToneAnalyzer
 

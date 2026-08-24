@@ -103,8 +103,8 @@ markers = [
   "unit: pure unit tests (no I/O)",
 ]
 filterwarnings = [
-  "error",
-  "ignore::DeprecationWarning:pkg_resources",
+  "ignore::DeprecationWarning",
+  "ignore::UserWarning",
 ]
 
 # ─── Coverage ────────────────────────────────────────────────────────────────

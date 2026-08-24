@@ -153,10 +153,13 @@ class AnalyzeResumeUseCase:
                 if not jd_keywords: return []
                 
                 # 2. Extract noun chunks from resume
-                import spacy
-                nlp = spacy.load("en_core_web_sm")
-                doc = nlp(resume_text.lower()[:4000])
-                resume_chunks = list(set([chunk.text for chunk in doc.noun_chunks if len(chunk.text) > 3]))
+                import re
+                words = re.findall(r'\b[a-z0-9+#.-]{3,}\b', resume_text.lower()[:4000])
+                resume_chunks = []
+                for i in range(len(words) - 1):
+                    resume_chunks.append(f"{words[i]} {words[i+1]}")
+                resume_chunks.extend(words)
+                resume_chunks = list(set(resume_chunks))
                 
                 # 3. Semantic comparison (limited to top 5 JD skills for speed)
                 matches = []

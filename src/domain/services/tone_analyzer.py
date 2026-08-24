@@ -6,7 +6,6 @@ import functools
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
 
-import spacy
 import textstat
 import structlog
 

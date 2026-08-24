@@ -14,7 +14,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import make_asgi_app
 
 from src.infrastructure.cache.redis_cache import RedisCacheAdapter, build_redis_client
-from src.infrastructure.ml.minilm_embedder import MiniLmEmbedder
 from src.infrastructure.ml.tfidf_fallback import TfIdfFallbackEmbedder
 from src.infrastructure.security.clamav_scanner import ClamAvScanner
 from src.infrastructure.skills.esco_loader import load_esco_taxonomy

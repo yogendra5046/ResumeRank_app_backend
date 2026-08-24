@@ -93,8 +93,8 @@ async def rewrite_resume(
         f"Target Sections: {', '.join(request.weak_sections)}"
     )
 
-    primary_model = "llama-3.3-70b-versatile"
-    fallback_model = "mixtral-8x7b-32768"
+    primary_model = "groq/compound"
+    fallback_model = "groq/compound-mini"
 
     import requests
 

@@ -16,7 +16,6 @@ from src.application.use_cases.get_job_status import GetJobStatusUseCase
 from src.domain.services.scoring_service import ScoringService
 from src.infrastructure.cache.redis_cache import RedisCacheAdapter
 from src.infrastructure.jobs.job_store import JobStore
-from src.infrastructure.ml.minilm_embedder import MiniLmEmbedder
 from src.infrastructure.ml.tfidf_fallback import TfIdfFallbackEmbedder
 from src.infrastructure.pdf.pymupdf_extractor import PyMuPdfExtractor
 from src.infrastructure.security.clamav_scanner import ClamAvScanner
