@@ -1,10 +1,16 @@
 # Use the official Python 3.11 slim image for a smaller footprint
 FROM python:3.11-slim
 
-# Set environment variables
+# Set environment variables for memory optimization
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    VECLIB_MAXIMUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
+    MALLOC_TRIM_THRESHOLD_=100000
 
 # Set the working directory in the container
 WORKDIR /app
