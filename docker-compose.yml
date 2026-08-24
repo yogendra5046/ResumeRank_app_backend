@@ -1,0 +1,73 @@
+version: "3.9"
+
+# Local development stack: API + Redis + ClamAV
+# Usage: docker compose up
+
+services:
+  api:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+      target: builder  # Use builder stage locally (has shell for debugging)
+    ports:
+      - "8080:8080"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+      API_KEY_SALT: local-dev-salt-change-in-prod
+      ENVIRONMENT: development
+      PYTHONPATH: /build
+    command:
+      - python
+      - -m
+      - uvicorn
+      - src.presentation.app:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --reload
+      - --log-level
+      - info
+    volumes:
+      - ./backend/src:/build/src:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --save "" --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  clamav:
+    image: clamav/clamav:stable
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav-db:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s  # DB download takes time on first run
+
+volumes:
+  clamav-db:

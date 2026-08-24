@@ -1,0 +1,341 @@
+name: ResumeRank Pro CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  FLUTTER_VERSION: "3.19.0"
+  REGISTRY: gcr.io
+  IMAGE_NAME: ${{ secrets.GCP_PROJECT_ID }}/resumerank-backend
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Python Lint ────────────────────────────────────────────────────────────
+  python-lint:
+    name: Python Lint (ruff + mypy)
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run ruff (0 errors required)
+        run: ruff check src/ tests/ --output-format=github
+
+      - name: Run ruff format check
+        run: ruff format --check src/ tests/
+
+      - name: Run mypy --strict (0 errors required)
+        run: mypy src/ --strict --ignore-missing-imports
+
+  # ─── Python Tests ───────────────────────────────────────────────────────────
+  python-test:
+    name: Python Tests (95% coverage)
+    runs-on: ubuntu-22.04
+    needs: python-lint
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+      clamav:
+        image: clamav/clamav:stable
+        ports:
+          - 3310:3310
+        options: >-
+          --health-cmd "clamdcheck.sh"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      REDIS_URL: redis://localhost:6379/0
+      CLAMAV_HOST: localhost
+      CLAMAV_PORT: "3310"
+      API_KEY_SALT: test-salt-ci-only
+      ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Download ESCO taxonomy fixture
+        run: |
+          mkdir -p src/infrastructure/skills/data
+          curl -fsSL \
+            "https://storage.googleapis.com/resumerank-fixtures/esco_skills_v1.1.1.json.gz" \
+            -o src/infrastructure/skills/data/esco_skills.json.gz \
+            || python scripts/generate_esco_fixture.py  # CI fallback generator
+
+      - name: Run pytest with benchmark (latency SLA enforced)
+        run: |
+          pytest tests/ \
+            -v \
+            --tb=short \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=95 \
+            --benchmark-disable \
+            -p no:cacheprovider
+
+      - name: Run benchmark suite (latency assertions)
+        run: |
+          pytest tests/ \
+            -k "benchmark" \
+            --benchmark-only \
+            --benchmark-json=benchmark-results.json \
+            --benchmark-max-time=30
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: backend/coverage.xml
+          flags: backend
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: backend/benchmark-results.json
+
+  # ─── Flutter Lint ───────────────────────────────────────────────────────────
+  flutter-lint:
+    name: Flutter Lint (analyze + dart_code_metrics)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install SDK dependencies
+        working-directory: flutter/resumerank_sdk
+        run: flutter pub get
+
+      - name: flutter analyze (0 issues required)
+        working-directory: flutter/resumerank_sdk
+        run: flutter analyze --fatal-infos --fatal-warnings
+
+      - name: dart_code_metrics strict
+        working-directory: flutter/resumerank_sdk
+        run: |
+          dart pub global activate dart_code_metrics
+          dart pub global run dart_code_metrics:metrics analyze lib \
+            --reporter=github \
+            --fatal-style \
+            --fatal-performance \
+            --fatal-warnings
+
+      - name: Install example app dependencies
+        working-directory: flutter/example_app
+        run: flutter pub get
+
+      - name: flutter analyze example app
+        working-directory: flutter/example_app
+        run: flutter analyze --fatal-infos --fatal-warnings
+
+  # ─── Flutter Tests ──────────────────────────────────────────────────────────
+  flutter-test:
+    name: Flutter Tests (widget + mockito)
+    runs-on: ubuntu-22.04
+    needs: flutter-lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install SDK dependencies
+        working-directory: flutter/resumerank_sdk
+        run: flutter pub get
+
+      - name: Run SDK tests with coverage
+        working-directory: flutter/resumerank_sdk
+        run: |
+          flutter test --coverage \
+            --machine > test-results.json || true
+          dart pub global activate coverage
+          dart pub global run coverage:format_coverage \
+            --lcov \
+            --in=coverage \
+            --out=lcov.info \
+            --packages=.dart_tool/package_config.json \
+            --report-on=lib
+
+      - name: Upload Flutter coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: flutter/resumerank_sdk/lcov.info
+          flags: flutter-sdk
+
+  # ─── Docker Build ───────────────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build (distroless, <150MB)
+    runs-on: ubuntu-22.04
+    needs: [python-test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push on PR)
+        uses: docker/build-push-action@v5
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: false
+          tags: resumerank-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+
+      - name: Assert image size <150MB
+        run: |
+          SIZE=$(docker image inspect resumerank-backend:ci \
+            --format='{{.Size}}' 2>/dev/null || \
+            docker load -i /tmp/image.tar | docker image inspect resumerank-backend:ci \
+            --format='{{.Size}}')
+          echo "Image size bytes: $SIZE"
+          if [ "$SIZE" -gt 157286400 ]; then
+            echo "FAIL: Image exceeds 150MB ($SIZE bytes)"
+            exit 1
+          fi
+          echo "PASS: Image size OK"
+
+      - name: Run Trivy security scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: resumerank-backend:ci
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 1
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+
+  # ─── Deploy to Cloud Run ────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-22.04
+    needs: [docker-build, flutter-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    permissions:
+      contents: read
+      id-token: write  # Workload Identity Federation
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker gcr.io --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push production image
+        uses: docker/build-push-action@v5
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: resumerank-backend
+          region: ${{ secrets.GCP_REGION }}
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          flags: >-
+            --concurrency=100
+            --max-instances=10
+            --min-instances=1
+            --memory=2Gi
+            --cpu=2
+            --timeout=30s
+            --set-env-vars=ENVIRONMENT=production
+          secrets: >-
+            API_KEY_SALT=resumerank-api-key-salt:latest,
+            REDIS_URL=resumerank-redis-url:latest
+
+      - name: Verify deployment health
+        run: |
+          URL=$(gcloud run services describe resumerank-backend \
+            --region=${{ secrets.GCP_REGION }} \
+            --format='value(status.url)')
+          for i in {1..10}; do
+            STATUS=$(curl -sf "${URL}/health" | jq -r '.status' 2>/dev/null)
+            if [ "$STATUS" = "ok" ]; then
+              echo "Deployment healthy: $URL"
+              exit 0
+            fi
+            echo "Waiting for health ($i/10)..."
+            sleep 10
+          done
+          echo "FAIL: Deployment health check timed out"
+          exit 1

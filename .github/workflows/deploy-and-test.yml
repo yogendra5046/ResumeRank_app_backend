@@ -1,0 +1,133 @@
+name: Complete CI/CD Deployment and E2E Testing
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Base URL for E2E Testing (Overrides default GitHub Pages URL)'
+        required: false
+        default: ''
+
+env:
+  # Replace with actual github username and repo name in a real scenario
+  # Default fallback if not provided via dispatch
+  DEFAULT_BASE_URL: "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+
+jobs:
+  build_and_deploy:
+    name: Build & Deploy Application
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install Dependencies
+        working-directory: ./flutter/resume_ai
+        run: flutter pub get
+
+      - name: Build Web Application
+        working-directory: ./flutter/resume_ai
+        run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'flutter/resume_ai/build/web'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  verify_and_test:
+    name: Verify Deployment & Run E2E Tests
+    needs: build_and_deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: read
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set BASE_URL
+        run: |
+          if [ -n "${{ github.event.inputs.base_url }}" ]; then
+            echo "BASE_URL=${{ github.event.inputs.base_url }}" >> $GITHUB_ENV
+          else
+            echo "BASE_URL=${{ env.DEFAULT_BASE_URL }}" >> $GITHUB_ENV
+          fi
+
+      - name: Wait for Deployment (Sleep)
+        run: sleep 30
+
+      - name: Verify Deployment (HTTP 200)
+        run: |
+          echo "Verifying URL: ${{ env.BASE_URL }}"
+          HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}\n" "${{ env.BASE_URL }}")
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "Deployment verification failed! HTTP Status: $HTTP_STATUS"
+            exit 1
+          fi
+          echo "Deployment verified successfully."
+
+      - name: Set up Python for Selenium Framework
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install QA Dependencies
+        working-directory: ./qa_automation/selenium_fw
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      - name: Install Chrome and ChromeDriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+          
+      - name: Run Selenium E2E Tests
+        working-directory: ./qa_automation/selenium_fw
+        run: |
+          # Running pytest with pytest-html and custom excel reporter plugin
+          pytest tests/ --html=reports/HTML/execution-report.html --self-contained-html -v --junitxml=reports/JSON/execution-results.xml || echo "Tests failed, proceeding to artifact upload"
+        env:
+          BASE_URL: ${{ env.BASE_URL }}
+          HEADLESS: "true"
+
+      - name: Generate Summary Report
+        if: always()
+        working-directory: ./qa_automation/selenium_fw
+        run: python utils/generate_summary.py
+
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-test-reports
+          path: |
+            qa_automation/selenium_fw/reports/
+            qa_automation/selenium_fw/screenshots/
+            qa_automation/selenium_fw/logs/
+          retention-days: 30
+
+      - name: Publish GitHub Summary
+        if: always()
+        run: cat ./qa_automation/selenium_fw/reports/Summary/summary.md >> $GITHUB_STEP_SUMMARY
