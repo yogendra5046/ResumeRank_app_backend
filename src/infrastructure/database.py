@@ -4,7 +4,8 @@ from sqlalchemy.orm import sessionmaker
 import os
 
 # 1. Support for PostgreSQL (Supabase) and SQLite (Local)
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./resume_rank.db")
+# Hardcoded to SQLite to bypass Railway Postgres issues on Render
+DATABASE_URL = "sqlite:///./resume_rank.db"
 
 # Handle the "postgres://" vs "postgresql://" issue some providers have
 if DATABASE_URL.startswith("postgres://"):
