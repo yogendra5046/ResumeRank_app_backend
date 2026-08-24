@@ -62,6 +62,12 @@ def create_app() -> FastAPI:
             content={"detail": f"Internal Server Error: {str(exc)}"}
         )
 
+    # Root Endpoint
+    @app.get("/")
+    async def root():
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/docs")
+
     # 3. Health Check
     @app.get("/health")
     async def health():
