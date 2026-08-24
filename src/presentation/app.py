@@ -33,7 +33,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from src.domain.models.user import User # Ensure model is registered
     from src.domain.models.history import HistoryItem
     from src.domain.models.job import JobApplication
-    Base.metadata.create_all(bind=engine)
+    import time
+    from sqlalchemy.exc import OperationalError
+    
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            Base.metadata.create_all(bind=engine)
+            print(f"Database connection successful on attempt {attempt + 1}")
+            break
+        except OperationalError as e:
+            if attempt == max_retries - 1:
+                print("Failed to connect to database after maximum retries.")
+                raise
+            print(f"Database connection attempt {attempt + 1} failed, retrying in 5s...")
+            time.sleep(5)
 
     # Redis / Cache / JobStore
     redis_enabled = os.environ.get("REDIS_ENABLED", "false").lower() == "true"
