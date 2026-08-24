@@ -10,5 +10,4 @@ services:
         value: 8080
       - key: ENVIRONMENT
         value: production
-    envGroups:
-      - akhil
+      - fromGroup: akhil
