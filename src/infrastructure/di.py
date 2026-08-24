@@ -10,13 +10,26 @@ logger = structlog.get_logger(__name__)
 async def preload_models(app_state: any) -> None:
     """Preload all heavy ML models to avoid timeout on first request."""
     logger.info("ml_models_preloading_start")
+    import os
+    use_advanced_ml = os.getenv("USE_ADVANCED_ML", "false").lower() == "true"
     
-    # 1. Use TF-IDF Embedder (Saves ~300MB RAM vs MiniLM for free tier)
-    embedder = TfIdfFallbackEmbedder()
+    if use_advanced_ml:
+        logger.info("loading_advanced_ml_models (PyTorch/spaCy)")
+        from src.infrastructure.ml.minilm_embedder import MiniLmEmbedder
+        embedder = MiniLmEmbedder()
+        import spacy
+        try:
+            nlp = spacy.load("en_core_web_sm")
+        except OSError:
+            import spacy.cli
+            spacy.cli.download("en_core_web_sm")
+            nlp = spacy.load("en_core_web_sm")
+    else:
+        logger.info("loading_lightweight_ml_models (TF-IDF/Regex)")
+        embedder = TfIdfFallbackEmbedder()
+        nlp = None
+    
     app_state.embedder = embedder
-    
-    # 2. Skip Preload spaCy (Saves ~100MB RAM for free tier)
-    nlp = None
 
     # 3. Initialize Services with preloaded components
     from src.domain.services.keyword_analyzer import KeywordAnalyzer

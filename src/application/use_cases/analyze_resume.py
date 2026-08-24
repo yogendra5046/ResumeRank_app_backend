@@ -153,13 +153,26 @@ class AnalyzeResumeUseCase:
                 if not jd_keywords: return []
                 
                 # 2. Extract noun chunks from resume
-                import re
-                words = re.findall(r'\b[a-z0-9+#.-]{3,}\b', resume_text.lower()[:4000])
-                resume_chunks = []
-                for i in range(len(words) - 1):
-                    resume_chunks.append(f"{words[i]} {words[i+1]}")
-                resume_chunks.extend(words)
-                resume_chunks = list(set(resume_chunks))
+                import os
+                use_advanced_ml = os.getenv("USE_ADVANCED_ML", "false").lower() == "true"
+                if use_advanced_ml:
+                    import spacy
+                    try:
+                        nlp = spacy.load("en_core_web_sm")
+                    except OSError:
+                        import spacy.cli
+                        spacy.cli.download("en_core_web_sm")
+                        nlp = spacy.load("en_core_web_sm")
+                    doc = nlp(resume_text.lower()[:4000])
+                    resume_chunks = list(set([chunk.text for chunk in doc.noun_chunks if len(chunk.text) > 3]))
+                else:
+                    import re
+                    words = re.findall(r'\b[a-z0-9+#.-]{3,}\b', resume_text.lower()[:4000])
+                    resume_chunks = []
+                    for i in range(len(words) - 1):
+                        resume_chunks.append(f"{words[i]} {words[i+1]}")
+                    resume_chunks.extend(words)
+                    resume_chunks = list(set(resume_chunks))
                 
                 # 3. Semantic comparison (limited to top 5 JD skills for speed)
                 matches = []

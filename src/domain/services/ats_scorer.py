@@ -158,7 +158,9 @@ class AtsScorer:
         return {"score": max(0, score), "details": details}
 
     def _extract_hard_skills(self, text: str) -> list[str]:
-        # Lightweight Regex Fallback to replace spaCy (Saves 100MB+ RAM)
+        import os
+        use_advanced_ml = os.getenv("USE_ADVANCED_ML", "false").lower() == "true"
+        
         blacklist = {
             "experience", "years", "requirements", "engineer", "software", "developer",
             "impact", "metrics", "strong", "results", "excellent", "skills", "ability",
@@ -170,19 +172,36 @@ class AtsScorer:
         }
         
         text_lower = text.lower()
-        # Extract alphanumeric words > 2 chars
-        words = re.findall(r'\b[a-z0-9+#.-]{3,}\b', text_lower)
         skills = []
         
-        for w in words:
-            if w not in blacklist and not w.isnumeric() and not re.match(r'^\d+-\d+$', w):
-                skills.append(w)
-                
-        # Basic bigrams (simulating noun chunks)
-        for i in range(len(words) - 1):
-            bigram = f"{words[i]} {words[i+1]}"
-            if words[i] not in blacklist and words[i+1] not in blacklist:
-                skills.append(bigram)
+        if use_advanced_ml:
+            import spacy
+            try:
+                nlp = spacy.load("en_core_web_sm")
+            except OSError:
+                import spacy.cli
+                spacy.cli.download("en_core_web_sm")
+                nlp = spacy.load("en_core_web_sm")
+            doc = nlp(text_lower)
+            for token in doc:
+                t_text = token.text
+                if token.pos_ in ["NOUN", "PROPN"] and not token.is_stop and len(t_text) > 2:
+                    if t_text not in blacklist and not re.match(r'^\d+-\d+$', t_text):
+                        skills.append(t_text)
+            for chunk in doc.noun_chunks:
+                clean_chunk = " ".join([t.text for t in chunk if not t.is_stop and not t.is_punct])
+                if clean_chunk and len(clean_chunk) > 2 and clean_chunk not in blacklist:
+                    if not any(word in blacklist for word in clean_chunk.split()):
+                        skills.append(clean_chunk)
+        else:
+            words = re.findall(r'\b[a-z0-9+#.-]{3,}\b', text_lower)
+            for w in words:
+                if w not in blacklist and not w.isnumeric() and not re.match(r'^\d+-\d+$', w):
+                    skills.append(w)
+            for i in range(len(words) - 1):
+                bigram = f"{words[i]} {words[i+1]}"
+                if words[i] not in blacklist and words[i+1] not in blacklist:
+                    skills.append(bigram)
             
         skill_counts = {}
         for s in skills:
@@ -200,12 +219,25 @@ class AtsScorer:
         total_points = 0
         max_points = len(jd_skills) * 10
         
-        # Lightweight chunking fallback (Regex-based)
-        words = re.findall(r'\b[a-z0-9+#.-]{3,}\b', resume_lower)
-        resume_chunks = []
-        for i in range(len(words) - 1):
-            resume_chunks.append(f"{words[i]} {words[i+1]}")
-        resume_chunks.extend(words)
+        import os
+        use_advanced_ml = os.getenv("USE_ADVANCED_ML", "false").lower() == "true"
+        
+        if use_advanced_ml:
+            import spacy
+            try:
+                nlp = spacy.load("en_core_web_sm")
+            except OSError:
+                import spacy.cli
+                spacy.cli.download("en_core_web_sm")
+                nlp = spacy.load("en_core_web_sm")
+            resume_doc = nlp(resume_lower)
+            resume_chunks = [chunk.text for chunk in resume_doc.noun_chunks if len(chunk.text) > 2]
+        else:
+            words = re.findall(r'\b[a-z0-9+#.-]{3,}\b', resume_lower)
+            resume_chunks = []
+            for i in range(len(words) - 1):
+                resume_chunks.append(f"{words[i]} {words[i+1]}")
+            resume_chunks.extend(words)
         
         details = []
         for skill in jd_skills:
