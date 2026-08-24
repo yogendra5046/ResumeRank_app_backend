@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: resanalyzer-backend
+    env: docker
+    region: ohio
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: ENVIRONMENT
+        value: production
+      # Add any other required environment variables here
+      # - key: GROQ_API_KEY
+      #   sync: false
